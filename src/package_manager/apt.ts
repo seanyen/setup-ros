@@ -1,7 +1,4 @@
-import * as im from "@actions/exec/lib/interfaces";
 import * as utils from "../utils";
-
-const CONNEXT_APT_PACKAGE_NAME = "rti-connext-dds-5.3.1"; // RTI Connext
 
 const aptCommandLine: string[] = [
 	"DEBIAN_FRONTEND=noninteractive",
@@ -16,45 +13,111 @@ const aptCommandLine: string[] = [
 const aptDependencies: string[] = [
 	"libssl-dev", // required for pip3 cryptography module
 	"python3-dev", // required for pip3 cryptography module
-	"build-essential",
 	"clang",
-	"cmake",
-	"git",
 	"lcov",
-	"libc++-dev",
-	"libc++abi-dev",
-	"python", // required for sourcing setup.sh
-	"python3-catkin-pkg-modules",
-	"python3-pip",
-	"python3-vcstool",
-	"wget",
-	// FastRTPS dependencies
-	"libasio-dev",
-	"libtinyxml2-dev",
+	"python3-rosinstall-generator",
 ];
 
 const distributionSpecificAptDependencies = {
-	bionic: [
-		// OpenSplice
-		"libopensplice69",
-
-		// python3-rosdep is conflicting with ros-melodic-desktop-full,
-		// and should not be used here. See ros-tooling/setup-ros#74
-		"python-rosdep",
-	],
 	focal: [
+		// Basic development packages
+		"build-essential",
+		"cmake",
+		"git",
+		"python3-pip",
+		"python3-catkin-pkg-modules",
+		"python3-vcstool",
+		"wget",
 		// python-rosdep does not exist on Focal, so python3-rosdep is used.
-		// The issue with ros-melodic-desktop-full is also non-applicable.
 		"python3-rosdep",
+		// python required for sourcing setup.sh
+		"python",
+		"libc++-dev",
+		"libc++abi-dev",
 	],
-	xenial: [
-		// OpenSplice
-		"libopensplice69",
+	jammy: [
+		// Basic development packages (from ROS 2 source/development setup instructions)
+		// ros-dev-tools includes many packages that we needed to include manually in Focal & older
+		"python3-flake8-docstrings",
+		"python3-pip",
+		"python3-pytest-cov",
+		"python3-flake8-blind-except",
+		"python3-flake8-builtins",
+		"python3-flake8-class-newline",
+		"python3-flake8-comprehensions",
+		"python3-flake8-deprecated",
+		"python3-flake8-import-order",
+		"python3-flake8-quotes",
+		"python3-pytest-repeat",
+		"python3-pytest-rerunfailures",
+		"ros-dev-tools",
+		// Additional colcon packages (not included in ros-dev-tools)
+		"python3-colcon-coveragepy-result",
+		"python3-colcon-lcov-result",
+		"python3-colcon-meson",
+		"python3-colcon-mixin",
+		// FastRTPS dependencies
+		"libasio-dev",
+		"libtinyxml2-dev",
+		// libc++-dev and libc++abi-dev installs intentionally removed because:
+		// https://github.com/ros-tooling/setup-ros/issues/506
+	],
+	noble: [
+		// Basic development packages (from ROS 2 source/development setup instructions)
+		// ros-dev-tools includes many packages that we needed to include manually in Focal & older
+		"python3-pip",
+		"python3-pytest-cov",
+		"python3-flake8-blind-except",
+		"python3-flake8-class-newline",
+		"python3-flake8-deprecated",
+		"python3-pytest-repeat",
+		"python3-pytest-rerunfailures",
+		"ros-dev-tools",
+		// Additional colcon packages (not included in ros-dev-tools)
+		"python3-colcon-coveragepy-result",
+		"python3-colcon-lcov-result",
+		"python3-colcon-meson",
+		"python3-colcon-mixin",
+		// Others
+		"python3-importlib-metadata",
+		// Explicitly install clang-rt:
+		// https://github.com/ros-tooling/setup-ros/issues/685
+		"libclang-rt-dev",
+	],
+	resolute: [
+		// Basic development packages (from ROS 2 source/development setup instructions)
+		// ros-dev-tools includes many packages that we needed to include manually in Focal & older
+		"python3-pip",
+		"python3-pytest-cov",
+		"python3-flake8-blind-except",
+		"python3-flake8-class-newline",
+		"python3-flake8-deprecated",
+		"python3-pytest-repeat",
+		"python3-pytest-rerunfailures",
+		"ros-dev-tools",
+		// Additional colcon packages (not included in ros-dev-tools)
+		"python3-colcon-coveragepy-result",
+		"python3-colcon-lcov-result",
+		"python3-colcon-meson",
+		"python3-colcon-mixin",
+		// Others
+		"python3-importlib-metadata",
+		// Explicitly install clang-rt:
+		// https://github.com/ros-tooling/setup-ros/issues/685
+		"libclang-rt-dev",
+	],
+};
 
-		// python3-rosdep is conflicting with ros-melodic-desktop-full,
-		// and should not be used here. See ros-tooling/setup-ros#74
-		"python-rosdep",
+const aptRtiConnextDds = {
+	jammy: ["rti-connext-dds-6.0.1"],
+	// ROS 2 Jazzy still uses Connext 6.0.1.
+	// ROS 2 Rolling switched to Connext 7.3.0 before Kilted and then switched to Connext 7.7.0 before Lyrical.
+	noble: [
+		"rti-connext-dds-6.0.1",
+		"rti-connext-dds-7.3.0-ros",
+		"rti-connext-dds-7.7.0-ros",
 	],
+	resolute: ["rti-connext-dds-7.7.0-ros"],
 };
 
 /**
@@ -75,41 +138,17 @@ export async function runAptGetInstall(packages: string[]): Promise<number> {
 }
 
 /**
- * Determines the Ubuntu distribution codename.
- *
- * This function directly source /etc/lsb-release instead of invoking
- * lsb-release as the package may not be installed.
- *
- * @returns Promise<string> Ubuntu distribution codename (e.g. "focal")
- */
-async function determineDistribCodename(): Promise<string> {
-	let distribCodename = "";
-	const options: im.ExecOptions = {};
-	options.listeners = {
-		stdout: (data: Buffer) => {
-			distribCodename += data.toString();
-		},
-	};
-	await utils.exec(
-		"bash",
-		["-c", 'source /etc/lsb-release ; echo -n "$DISTRIB_CODENAME"'],
-		options
-	);
-	return distribCodename;
-}
-
-/**
  * Run ROS 2 APT dependencies.
  *
  * @returns Promise<number> exit code
  */
 export async function installAptDependencies(
-	installConnext = false
+	installConnext: boolean = false,
 ): Promise<number> {
+	const distribCodename = await utils.determineDistribCodename();
 	let aptPackages: string[] = installConnext
-		? aptDependencies.concat(CONNEXT_APT_PACKAGE_NAME)
+		? aptDependencies.concat(aptRtiConnextDds[distribCodename] || [])
 		: aptDependencies;
-	const distribCodename = await determineDistribCodename();
 	const additionalAptPackages =
 		distributionSpecificAptDependencies[distribCodename] || [];
 	aptPackages = aptPackages.concat(additionalAptPackages);

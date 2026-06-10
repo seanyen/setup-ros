@@ -15,7 +15,7 @@ export async function exec(
 	commandLine: string,
 	args?: string[],
 	options?: im.ExecOptions,
-	log_message?: string
+	log_message?: string,
 ): Promise<number> {
 	const argsAsString = (args || []).join(" ");
 	const message = log_message || `Invoking "${commandLine} ${argsAsString}"`;
@@ -29,7 +29,7 @@ export function getRequiredRosDistributions(): string[] {
 	const requiredRosDistributions = core.getInput("required-ros-distributions");
 	if (requiredRosDistributions) {
 		requiredRosDistributionsList = requiredRosDistributions.split(
-			RegExp("\\s")
+			RegExp("\\s"),
 		);
 	}
 
@@ -42,20 +42,18 @@ export function getRequiredRosDistributions(): string[] {
 
 //list of valid linux distributions
 const validDistro: string[] = [
-	"kinetic",
-	"lunar",
-	"melodic",
 	"noetic",
-	"dashing",
-	"eloquent",
-	"foxy",
-	"galactic",
+	"humble",
+	"iron",
+	"jazzy",
+	"kilted",
+	"lyrical",
 	"rolling",
 ];
 
 //Determine whether all inputs name supported ROS distributions.
 export function validateDistro(
-	requiredRosDistributionsList: string[]
+	requiredRosDistributionsList: string[],
 ): boolean {
 	for (const rosDistro of requiredRosDistributionsList) {
 		if (validDistro.indexOf(rosDistro) <= -1) {
@@ -64,4 +62,63 @@ export function validateDistro(
 	}
 
 	return true;
+}
+
+/**
+ * Get the output of a given command.
+ *
+ * @param command the command, which must output something
+ * @returns the string output
+ */
+export async function getCommandOutput(command: string): Promise<string> {
+	let output = "";
+	const options: im.ExecOptions = {};
+	options.listeners = {
+		stdout: (data: Buffer) => {
+			output += data.toString();
+		},
+	};
+	await exec("bash", ["-c", command], options);
+	return output.trim();
+}
+
+/**
+ * Determines the Ubuntu distribution codename.
+ *
+ * This function directly source /etc/lsb-release instead of invoking
+ * lsb-release as the package may not be installed.
+ *
+ * @returns Promise<string> Ubuntu distribution codename (e.g. "focal")
+ */
+export async function determineDistribCodename(): Promise<string> {
+	return getCommandOutput(
+		'source /etc/lsb-release ; echo -n "$DISTRIB_CODENAME"',
+	);
+}
+
+/**
+ * Determines the Linux distribution.
+ *
+ * @returns Promise<string> Linux distribution (e.g. "ubuntu")
+ */
+export async function determineDistrib(): Promise<string> {
+	return getCommandOutput('source /etc/os-release ; echo -n "$ID"');
+}
+
+/**
+ * Determines the Linux distribution version.
+ *
+ * @returns Promise<string> Linux distribution version (e.g. "24.04")
+ */
+export async function determineDistribVer(): Promise<string> {
+	return getCommandOutput('source /etc/os-release ; echo -n "$VERSION_ID"');
+}
+
+/**
+ * Get the machine architecture according to dpkg.
+ *
+ * @returns the architecture according to dpkg
+ */
+export async function getArch(): Promise<string> {
+	return getCommandOutput("dpkg --print-architecture");
 }

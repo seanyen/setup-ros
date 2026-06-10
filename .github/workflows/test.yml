@@ -3,7 +3,7 @@ on:
   pull_request:
   push:
     branches:
-      - master
+      - main
       - "releases/*"
   schedule:
     # Run the CI automatically twice per day to look for flakyness.
@@ -23,12 +23,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macOS-latest, windows-latest]
+        os:
+          - macOS-latest
+          - windows-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2.4.1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6.1.0
         with:
-          node-version: "12.x"
+          node-version: "24.x"
       - run: .github/workflows/build-and-test.sh
       - uses: ./ # Uses an action in the root directory
       - run: .github/workflows/check-environment.sh
@@ -36,20 +38,23 @@ jobs:
   test_environment_linux:
     name: "Check development tools"
     runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.docker_image }}
     strategy:
       fail-fast: false
       matrix:
         docker_image:
-          - "ubuntu:bionic"
-          - "ubuntu:focal"
-          - "ubuntu:xenial"
-    container:
-      image: ${{ matrix.docker_image }}
+          - ubuntu:22.04
+          - ubuntu:24.04
+          - ubuntu:26.04
+          - almalinux:8
+          - almalinux:9
+          - almalinux:10
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2.4.1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6.1.0
         with:
-          node-version: "12.x"
+          node-version: "24.x"
       - run: .github/workflows/build-and-test.sh
       - uses: ./ # Uses an action in the root directory
       - run: .github/workflows/check-environment.sh
@@ -68,20 +73,25 @@ jobs:
           # - macOS-latest
           - windows-latest
         ros_distribution:
-          # Dashing Diademata (May 2019 - May 2021)
-          - dashing
-
-          # Eloquent Elusor (November 2019 - November 2020)
-          - eloquent
+          # Humble Hawksbill (May 2022 - May 2027)
+          - humble
+          # Jazzy Jalisco (May 2024 - May 2029)
+          - jazzy
+          # Kilted Kaiju (May 2025 - November 2026)
+          - kilted
+          # Lyrical Luth (May 2026 - May 2031)
+          - lyrical
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2.4.1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6.1.0
         with:
-          node-version: "12.x"
+          node-version: "24.x"
       - run: .github/workflows/build-and-test.sh
       - uses: ./ # Uses an action in the root directory
         with:
           required-ros-distributions: ${{ matrix.ros_distribution }}
+          # TODO(christophebedard): remove once Lyrical has been released and the Rolling transition to Resolute is complete
+          use-ros2-testing: ${{ matrix.ros_distribution == 'lyrical' || matrix.ros_distribution == 'rolling' }}
       - run: .github/workflows/check-environment.sh
       - run: .github/workflows/check-ros2-distribution.sh "${{ matrix.ros_distribution }}"
         if: matrix.os != 'windows-latest'
@@ -91,21 +101,11 @@ jobs:
         shell: cmd
         if: matrix.os == 'windows-latest'
 
-  test_ros_binary_install_ubuntu:
+  test_ros_binary_install_linux:
     name: "Check ROS distribution"
     strategy:
       fail-fast: false
       matrix:
-        ros_distribution:
-          - kinetic
-          - melodic
-          - noetic
-          - dashing
-          - eloquent
-          - foxy
-          - galactic
-          - rolling
-
         # Define the Docker image(s) associated with each ROS distribution.
         # The include syntax allows additional variables to be defined, like
         # docker_image in this case. See documentation:
@@ -113,43 +113,49 @@ jobs:
         #
         # Platforms are defined in REP 3: https://ros.org/reps/rep-0003.html
         include:
-          # Kinetic Kame (May 2016 - May 2021)
-          - docker_image: ubuntu:xenial
-            ros_distribution: kinetic
-            ros_version: 1
 
-          # Melodic Morenia (May 2018 - May 2023)
-          - docker_image: ubuntu:bionic
-            ros_distribution: melodic
-            ros_version: 1
-
-          # Noetic Ninjemys (May 2020 - May 2025)
-          - docker_image: ubuntu:focal
-            ros_distribution: noetic
-            ros_version: 1
-
-          # Dashing Diademata (May 2019 - May 2021)
-          - docker_image: ubuntu:bionic
-            ros_distribution: dashing
+          # Humble Hawksbill (May 2022 - May 2027)
+          - docker_image: ubuntu:jammy
+            ros_distribution: humble
             ros_version: 2
 
-          # Eloquent Elusor (November 2019 - November 2020)
-          - docker_image: ubuntu:bionic
-            ros_distribution: eloquent
+          - docker_image: almalinux:8
+            ros_distribution: humble
             ros_version: 2
 
-          # Foxy Fitzroy (June 2020 - May 2023)
-          - docker_image: ubuntu:focal
-            ros_distribution: foxy
+          # Jazzy Jalisco (May 2024 - May 2029)
+          - docker_image: ubuntu:noble
+            ros_distribution: jazzy
             ros_version: 2
 
-          # Galactic Geochelone (May 2021 - November 2022)
-          - docker_image: ubuntu:focal
-            ros_distribution: galactic
+          - docker_image: almalinux:9
+            ros_distribution: jazzy
+            ros_version: 2
+
+          # Kilted Kaiju (May 2025 - November 2026)
+          - docker_image: ubuntu:noble
+            ros_distribution: kilted
+            ros_version: 2
+
+          - docker_image: almalinux:9
+            ros_distribution: kilted
+            ros_version: 2
+
+          # Lyrical Luth (May 2026 - May 2031)
+          - docker_image: ubuntu:resolute
+            ros_distribution: lyrical
+            ros_version: 2
+
+          - docker_image: almalinux:10
+            ros_distribution: lyrical
             ros_version: 2
 
           # Rolling Ridley (see REP 2002: https://www.ros.org/reps/rep-2002.html)
-          - docker_image: ubuntu:focal
+          - docker_image: ubuntu:resolute
+            ros_distribution: rolling
+            ros_version: 2
+
+          - docker_image: almalinux:10
             ros_distribution: rolling
             ros_version: 2
 
@@ -158,46 +164,68 @@ jobs:
       image: ${{ matrix.docker_image }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2.4.1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6.1.0
         with:
-          node-version: "12.x"
+          node-version: "24.x"
       - run: .github/workflows/build-and-test.sh
       - uses: ./ # Uses an action in the root directory
         with:
           required-ros-distributions: ${{ matrix.ros_distribution }}
+          # TODO(christophebedard): remove once Lyrical has been released and the Rolling transition to Resolute is complete
+          use-ros2-testing: ${{ matrix.ros_distribution == 'lyrical' || matrix.ros_distribution == 'rolling' }}
       - run: .github/workflows/check-environment.sh
       - run: .github/workflows/check-ros-distribution.sh "${{ matrix.ros_distribution }}"
         if: matrix.ros_version == 1
       - run: .github/workflows/check-ros2-distribution.sh "${{ matrix.ros_distribution }}"
         if: matrix.ros_version == 2
 
-  test_multiple_ros_installations:
-    name: "ROS and ROS 2 Binary Install Test Suite (Linux only)"
+  test_repo_with_root_setup_cfg:
+    name: "Test with setup.cfg file in root directory (Linux only)"
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:bionic
+      image: ubuntu:26.04
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-node@v2.4.1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6.1.0
         with:
-          node-version: "12.x"
+          node-version: "24.x"
       - run: .github/workflows/build-and-test.sh
+      - run: cp .github/workflows/test_setup.cfg setup.cfg
       - uses: ./ # Uses an action in the root directory
-        with:
-          required-ros-distributions: melodic dashing
-      - run: .github/workflows/check-ros2-distribution.sh dashing
-      - run: .github/workflows/check-ros-distribution.sh melodic
+      - run: colcon --help
 
   test_on_setup_ros_docker_container:
     name: "Test on a setup-ros-docker container"
     runs-on: ubuntu-latest
     container:
-      image: rostooling/setup-ros-docker:ubuntu-focal-latest
+      image: ghcr.io/ros-tooling/setup-ros-docker/setup-ros-docker-ubuntu-resolute:latest
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-node@v2.4.1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6.1.0
         with:
-          node-version: "12.x"
+          node-version: "24.x"
       - run: .github/workflows/build-and-test.sh
       - uses: ./
+
+  test_install_connext:
+    name: "Test with RTI Connext DDS"
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.docker_image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        docker_image:
+          - ubuntu:26.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6.1.0
+        with:
+          node-version: "24.x"
+      - run: .github/workflows/build-and-test.sh
+      - uses: ./
+        with:
+          install-connext: true
+      - run: .github/workflows/check-environment.sh
+      - run: dpkg -l | grep rti-connext-dds-
